@@ -1,5 +1,6 @@
 """ import your model here """
 import tensorwolf as tf
+import numpy as np
 """ your model should support the following code """
 
 # create model
@@ -25,10 +26,11 @@ from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
 # train
-for _ in range(1000):
+for _ in range(10000):
     batch_xs, batch_ys = mnist.train.next_batch(100)
-    sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
-
+    ww, g, ce = sess.run([train_step, W_grad, cross_entropy],
+                         feed_dict={x: batch_xs, y_: batch_ys})
+    print(np.sum(ww))
 # eval
 correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))

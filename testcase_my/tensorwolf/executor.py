@@ -3,6 +3,8 @@ from __future__ import absolute_import
 import numpy as np
 from tensorwolf.topo import *
 from tensorwolf.ops import *
+import sys
+import os
 #reference: dlsys-autodiff
 
 
@@ -36,8 +38,10 @@ class Executor(object):
         for node in self.topo_order:
             if node in node_to_val_map:
                 continue
+            # print("Compute: ", node.name)
             input_vals = [node_to_val_map[n] for n in node.inputs]
             node_to_val_map[node] = node.op.compute(node, input_vals)
+            # os.system("PAUSE")
 
         return [node_to_val_map[n] for n in self.eval_node_list]
 
@@ -58,7 +62,7 @@ def gradients(output_node, node_list):
     node_to_output_grads_list = {}
     node_to_output_grads_list[output_node] = [oneslike_op(output_node)]
     node_to_output_grad = {}
-    reverse_topo_order = reserved(find_topo_sort([output_node]))
+    reverse_topo_order = reversed(find_topo_sort([output_node]))
     for node in reverse_topo_order:
         output_grad = sum_node_list(node_to_output_grads_list[node])
         node_to_output_grad[node] = output_grad
