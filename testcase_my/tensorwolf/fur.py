@@ -2,7 +2,8 @@
 from tensorwolf.executor import *
 zeros = np.zeros
 ones = np.ones
-float32 = np.float64
+float32 = np.float32
+float64 = np.float64
 
 
 class Session(object):
@@ -30,3 +31,29 @@ class Session(object):
     def __exit__(self, e_t, e_v, t_b):
         # I do not know what these args mean...
         return
+
+
+class train(object):
+    class Optimizer(object):
+        def __init__(self):
+            return None
+
+    class GradientDescentOptimizer(Optimizer):
+        def __init__(self, learning_rate=1, name="GradientDescentOptimizer"):
+            self.learning_rate = learning_rate
+            self.name = name
+
+        def get_variables_list(self):
+            variables_list = []
+            for variable in variables:
+                variables_list.append(variable)
+            return variables_list
+
+        def minimize(self, target):
+            variables_to_change = self.get_variables_list()
+            variables_gradients = gradients(target, variables_to_change)
+            change_list = []
+            for index, variable in enumerate(variables_to_change):
+                change_list.append(
+                    assign(variable, variable - (self.learning_rate * variables_gradients[index])))
+            return pack(change_list)

@@ -1,6 +1,11 @@
 import numpy as np
 
 
-a = np.ones([2, 3, 4])
-b = np.sum(a, axis=1, keepdims=True)
-print(b.shape)
+names = {
+    "a": "this is a",
+    "b": "this is b",
+    "c": "this is c"
+}
+
+for name, index in enumerate(names):
+    print(name)

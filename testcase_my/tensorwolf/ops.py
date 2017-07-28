@@ -145,7 +145,7 @@ class AddOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [output_grad, output_grad]
+        return [adapt(output_grad, node.inputs[0]), adapt(output_grad, node.inputs[1])]
 
 
 class SubOp(Op):
@@ -161,7 +161,8 @@ class SubOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [output_grad, -output_grad]
+        return [adapt(output_grad, node.inputs[0]),
+                adapt(constant(0.) - output_grad, node.inputs[1])]
 
 
 class MulOp(Op):
@@ -177,7 +178,8 @@ class MulOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [node.inputs[1] * output_grad, node.inputs[0] * output_grad]
+        return [adapt(node.inputs[1] * output_grad, node.inputs[0]),
+                adapt(node.inputs[0] * output_grad, node.inputs[1])]
 
 
 class DivOp(Op):
@@ -193,8 +195,9 @@ class DivOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [output_grad / node.inputs[1],
-                ((output_grad * node.inputs[0] * constant(-1)) / node.inputs[1]) / node.inputs[1]]
+        return [adapt(output_grad / node.inputs[1], node.inputs[0]),
+                adapt(((output_grad * node.inputs[0] * constant(-1)) /
+                       node.inputs[1]) / node.inputs[1], node.inputs[1])]
 
 
 class MatMulOp(Op):
@@ -254,7 +257,8 @@ class MatMulOp(Op):
                 node.inputs[1], output_grad, trans_A=False, trans_B=True)
             rhs_grad = matmul(
                 output_grad, node.inputs[0], trans_A=True, trans_B=False)
-        return [lhs_grad, rhs_grad]
+        return [adapt(lhs_grad, node.inputs[0]),
+                adapt(rhs_grad, node.inputs[1])]
 
 
 class PlaceholderOp(Op):
@@ -391,8 +395,8 @@ class ReduceMeanOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [broadcastto_op(output_grad, node.inputs[0]) /
-                reduce_sum(oneslike_op(node.inputs[0]), axis=node.const_attr[0], keep_dims=node.const_attr[1])]
+        return [adapt(broadcastto_op(output_grad, node.inputs[0]) /
+                      reduce_sum(oneslike_op(node.inputs[0]), axis=node.const_attr[0], keep_dims=node.const_attr[1]), node.inputs[0])]
 
 
 class ReduceShapeSumOp(Op):
@@ -449,7 +453,6 @@ class ReduceShapeMeanOp(Op):
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 2
-
         output_val = input_vals[0]
         while len(output_val.shape) > len(input_vals[1].shape):
             output_val = np.mean(output_val, axis=0)
@@ -457,7 +460,6 @@ class ReduceShapeMeanOp(Op):
             if output_val.shape[dim] > input_vals[1].shape[dim]:
                 assert input_vals[1].shape[dim] == 1
                 output_val = np.mean(output_val, axis=dim, keepdims=True)
-
         return output_val
 
     def gradient(self, node, output_grad):
@@ -511,7 +513,7 @@ class ExpOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [output_grad * exp(node.inputs[0])]
+        return [adapt(output_grad * exp(node.inputs[0]), node.inputs[0])]
 
 
 class LogOp(Op):
@@ -528,7 +530,7 @@ class LogOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [output_grad / node.inputs[0]]
+        return [adapt(output_grad / node.inputs[0], node.inputs[0])]
 
 
 class VariablesInitOp(Op):
@@ -628,6 +630,25 @@ class CastOp(Op):
         raise NotImplementedError
 
 
+class PackOp(Op):
+    def __call__(self, node_list, name=None):
+        new_node = Op.__call__(self)
+        new_node.inputs = node_list
+        if name is None:
+            new_node.name = "Pack(%s)" % (
+                str([node.name for node in node_list]))
+        else:
+            new_node.name = name
+        return new_node
+
+    def compute(self, node, input_vals):
+        # nothing should be done since this is the top
+        return None
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
 # Create global singletons of operators.
 add_op = AddOp()
 sub_op = SubOp()
@@ -652,3 +673,4 @@ equal = EqualOp()
 argmax = ArgMaxOp()
 cast = CastOp()
 adapt = AdaptShapeOp()
+pack = PackOp()
