@@ -1,9 +1,15 @@
 """ Some API to make tensorwolf look like tensorflow """
 from tensorwolf.executor import *
+
+
 zeros = np.zeros
 ones = np.ones
 float32 = np.float32
 float64 = np.float64
+
+
+def random_normal(shape, mean=0.0, stddev=1.0, dtype=float32, seed=None, name=None):
+    return np.random.normal(loc=mean, scale=stddev, size=shape)
 
 
 class Session(object):
