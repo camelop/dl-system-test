@@ -194,7 +194,7 @@ class DivOp(Op):
 
     def gradient(self, node, output_grad):
         return [output_grad / node.inputs[1],
-                (output_grad * node.inputs[0] * constant(-1)) / node.inputs[1] / node.inputs[1]]
+                ((output_grad * node.inputs[0] * constant(-1)) / node.inputs[1]) / node.inputs[1]]
 
 
 class MatMulOp(Op):
@@ -326,7 +326,7 @@ class ZerosLikeOp(Op):
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
-        output_val = np.zeroslike_op(input_vals[0].shape)
+        output_val = np.zeros(input_vals[0].shape)
         return output_val
 
     def gradient(self, node, output_grad):
@@ -400,11 +400,14 @@ class ReduceShapeSumOp(Op):
         """Creates a node that represents sum(node_A) to shape node_B.shape"""
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "ReduceShapeSum(%s, shape=%s)" % (node_A, node_B.shape)
+        new_node.name = "ReduceShapeSum(%s, %s.shape)" % (
+            node_A.name, node_B.name)
         return new_node
 
     def compute(self, node, input_vals):
+
         assert len(input_vals) == 2
+
         output_val = input_vals[0]
         while len(output_val.shape) > len(input_vals[1].shape):
             output_val = np.sum(output_val, axis=0)
@@ -412,10 +415,27 @@ class ReduceShapeSumOp(Op):
             if output_val.shape[dim] > input_vals[1].shape[dim]:
                 assert input_vals[1].shape[dim] == 1
                 output_val = np.sum(output_val, axis=dim, keepdims=True)
+
         return output_val
 
     def gradient(self, node, output_grad):
         return [broadcastto_op(output_grad, node.inputs[0]), zeroslike_op(node.inputs[1])]
+
+
+class AdaptShapeOp(Op):
+    def __call__(self, node_A, node_B):
+        """(Adapt the shape) Creates a node that represents sum(node_A) to shape node_B.shape
+            for now it is the same as ReduceShapeSum"""
+        new_node = reduceshapesum_op(node_A, node_B)
+        new_node.name = "Adapt(%s, %s.shape)" % (
+            node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        raise NotImplementedError
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
 
 
 class ReduceShapeMeanOp(Op):
@@ -423,12 +443,13 @@ class ReduceShapeMeanOp(Op):
         """Creates a node that represents mean(node_A) to shape node_B.shape"""
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "ReduceShapeMean(%s, shape=%s)" % (
-            node_A, node_B.shape)
+        new_node.name = "ReduceShapeMean(%s, shape=%s.shape)" % (
+            node_A.name, node_B.name)
         return new_node
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 2
+
         output_val = input_vals[0]
         while len(output_val.shape) > len(input_vals[1].shape):
             output_val = np.mean(output_val, axis=0)
@@ -436,6 +457,7 @@ class ReduceShapeMeanOp(Op):
             if output_val.shape[dim] > input_vals[1].shape[dim]:
                 assert input_vals[1].shape[dim] == 1
                 output_val = np.mean(output_val, axis=dim, keepdims=True)
+
         return output_val
 
     def gradient(self, node, output_grad):
@@ -469,7 +491,7 @@ class BroadcastToOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        grad_A = reduceshapemean_op(node.inputs[0], node.inputs[0])
+        grad_A = reduceshapesum_op(output_grad, node.inputs[0])
         grad_B = zeroslike_op(node.inputs[1])
         return [grad_A, grad_B]
 
@@ -629,3 +651,4 @@ log = LogOp()
 equal = EqualOp()
 argmax = ArgMaxOp()
 cast = CastOp()
+adapt = AdaptShapeOp()

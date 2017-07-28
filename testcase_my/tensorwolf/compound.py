@@ -10,7 +10,7 @@ class nn(object):
                 name = "Softmax(%s, dim=%s)" % (node_A.name, dim)
             exp_node_A = exp(node_A)
             new_node = exp_node_A / \
-                reduce_sum(exp_node_A, axis=dim, keep_dims=True)
+                broadcastto_op(reduce_sum(exp_node_A, axis=dim), exp_node_A)
             new_node.name = name
             return new_node
 

@@ -38,9 +38,12 @@ class Executor(object):
         for node in self.topo_order:
             if node in node_to_val_map:
                 continue
-            # print("Compute: ", node.name)
+            #print("Compute: ", node.name)
             input_vals = [node_to_val_map[n] for n in node.inputs]
-            node_to_val_map[node] = node.op.compute(node, input_vals)
+            value = node.op.compute(node, input_vals)
+            # if isinstance(value, np.ndarray):
+            #    print("shape:", value.shape)
+            node_to_val_map[node] = value
             # os.system("PAUSE")
 
         return [node_to_val_map[n] for n in self.eval_node_list]
