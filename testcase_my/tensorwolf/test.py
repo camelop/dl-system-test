@@ -1,11 +1,14 @@
 import numpy as np
 
 
-names = {
-    "a": "this is a",
-    "b": "this is b",
-    "c": "this is c"
-}
+class A(object):
+    def hello(self):
+        print("hello")
 
-for name, index in enumerate(names):
-    print(name)
+
+def A: : bello(self)
+    print("bello")
+
+
+a = A()
+a.bello()

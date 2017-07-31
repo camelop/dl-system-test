@@ -39,6 +39,7 @@ class Executor(object):
             if node in node_to_val_map:
                 continue
             #print("Compute: ", node.name)
+            #print("Compute-Type: ", type(node.op))
             input_vals = [node_to_val_map[n] for n in node.inputs]
             value = node.op.compute(node, input_vals)
             # if isinstance(value, np.ndarray):

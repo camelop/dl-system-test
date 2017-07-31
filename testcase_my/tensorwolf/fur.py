@@ -9,7 +9,9 @@ float64 = np.float64
 
 
 def random_normal(shape, mean=0.0, stddev=1.0, dtype=float32, seed=None, name=None):
-    return np.random.normal(loc=mean, scale=stddev, size=shape)
+    return_val = np.random.normal(loc=mean, scale=stddev, size=shape)
+    # print(return_val)
+    return return_val
 
 
 class Session(object):
@@ -63,3 +65,25 @@ class train(object):
                 change_list.append(
                     assign(variable, variable - (self.learning_rate * variables_gradients[index])))
             return pack(change_list)
+
+
+class nn(object):
+    """ Supports neural network. """
+    class SoftmaxOp(Op):
+        def __call__(self, node_A, dim=-1, name=None):
+            if name is None:
+                name = "Softmax(%s, dim=%s)" % (node_A.name, dim)
+            exp_node_A = exp(node_A)
+            new_node = exp_node_A / \
+                broadcastto_op(reduce_sum(exp_node_A, axis=dim), exp_node_A)
+            new_node.name = name
+            return new_node
+
+    softmax = SoftmaxOp()
+    relu = relu
+
+    class SoftmaxCrossEntropyWithLogitsOp(Op):
+        def __call__(self, logits, labels):
+            return softmax_cross_entropy_op(logits, labels)
+
+    softmax_cross_entropy_with_logits = SoftmaxCrossEntropyWithLogitsOp()

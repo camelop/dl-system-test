@@ -92,6 +92,13 @@ class Node(object):
         """Allow print to display node name."""
         return self.name
 
+    # I have not figured out how to import these two from each other. TODO
+    def eval(self, feed_dict):
+        """Calculate the value of this node by running a session immediately."""
+        import tensorwolf.executor as executor
+        ex = executor.Executor(eval_node_list=[self])
+        return ex.run(feed_dict=feed_dict)[0]
+
 
 class Op(object):
     """Op represents operations performed on nodes."""
@@ -198,6 +205,38 @@ class DivOp(Op):
         return [adapt(output_grad / node.inputs[1], node.inputs[0]),
                 adapt(((output_grad * node.inputs[0] * constant(-1)) /
                        node.inputs[1]) / node.inputs[1], node.inputs[1])]
+
+
+class ReluOp(Op):
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Relu(%s)" % (node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        output_val = np.maximum(input_vals[0], 0)
+        return output_val
+
+    def gradient(self, node, output_grad):
+        return [relu_gradient_op(node.inputs[0], output_grad)]
+
+
+class ReluGradientOp(Op):
+    def __call__(self, node_A, node_B):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "ReluGradient(%s)" % (node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        output_val = (np.sign(input_vals[0]) + 1) * 0.5 * input_vals[1]
+        return output_val
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
 
 
 class MatMulOp(Op):
@@ -533,6 +572,62 @@ class LogOp(Op):
         return [adapt(output_grad / node.inputs[0], node.inputs[0])]
 
 
+def softmax_func(y):
+    expy = np.exp(y)
+    softmax = expy / np.sum(expy, axis=-1, keepdims=True)
+    return softmax
+
+
+class SoftmaxCrossEntropyOp(Op):
+    def __call__(self, node_A, node_B):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "SoftmaxCrossEntropy(%s, %s)" % (
+            node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        y = input_vals[0]
+        y_ = input_vals[1]
+        softmax = softmax_func(y)
+        # change into axis=-1 to allow higher dimensions
+        mid1 = y_ * np.log(softmax)
+        mid2 = -np.sum(mid1, axis=-1)
+        cross_entropy = np.mean(mid2)
+        output_val = cross_entropy
+        return output_val
+
+    def gradient(self, node, output_grad):
+        grad_A = (softmax_op(node.inputs[0]) - node.inputs[1]) * \
+            output_grad / \
+            reduce_sum(oneslike_op(node.inputs[0]), axis=0, keep_dims=True)
+        grad_B = zeroslike_op(node.inputs[1])
+        return [adapt(grad_A, node.inputs[0]), grad_B]
+
+
+class SoftmaxOp(Op):
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Softmax(%s)" % (node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        output_val = softmax_func(input_vals[0])
+        return output_val
+
+    def gradient(self, node, output_grad):
+        # if the user want gradient, they should use nn.softmax version
+        raise NotImplementedError
+
+
+'''
+    Functional Operators Below
+'''
+
+
 class VariablesInitOp(Op):
     def __call__(self):
         """Feed the global 'variables' into the exact variables."""
@@ -654,6 +749,10 @@ add_op = AddOp()
 sub_op = SubOp()
 mul_op = MulOp()
 div_op = DivOp()
+relu = ReluOp()
+relu_gradient_op = ReluGradientOp()
+softmax_op = SoftmaxOp()
+softmax_cross_entropy_op = SoftmaxCrossEntropyOp()
 matmul = MatMulOp()
 placeholder = PlaceholderOp()
 oneslike_op = OnesLikeOp()
