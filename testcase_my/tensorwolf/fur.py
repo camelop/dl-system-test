@@ -46,16 +46,16 @@ class train(object):
         def __init__(self):
             return None
 
-    class GradientDescentOptimizer(Optimizer):
-        def __init__(self, learning_rate=1, name="GradientDescentOptimizer"):
-            self.learning_rate = learning_rate
-            self.name = name
-
         def get_variables_list(self):
             variables_list = []
-            for variable in variables:
+            for variable in variable_to_node:
                 variables_list.append(variable)
             return variables_list
+
+    class GradientDescentOptimizer(Optimizer):
+        def __init__(self, learning_rate=0.01, name="GradientDescentOptimizer"):
+            self.learning_rate = learning_rate
+            self.name = name
 
         def minimize(self, target):
             variables_to_change = self.get_variables_list()
@@ -64,6 +64,54 @@ class train(object):
             for index, variable in enumerate(variables_to_change):
                 change_list.append(
                     assign(variable, variable - (self.learning_rate * variables_gradients[index])))
+            return pack(change_list)
+
+    class AdamOptimizer(Optimizer):
+        def __init__(self, learning_rate=0.001,
+                     beta1=0.9,
+                     beta2=0.999,
+                     epsilon=1e-8,
+                     name="AdamOptimizer"):
+            # for more detail:
+            # https://arxiv.org/abs/1412.6980
+            # https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer
+            self.learning_rate = learning_rate
+            self.beta1 = beta1
+            self.beta2 = beta2
+            self.epsilon = epsilon
+            self.name = name
+
+        def minimize(self, target):
+            variables_to_change = self.get_variables_list()
+            variables_gradients = gradients(target, variables_to_change)
+            change_list = []
+            # use constant to avoid initialize
+            self.t = constant(0)
+            self.assignt = assign(self.t, self.t + 1)
+            self.lrt = self.learning_rate * \
+                sqrt_op(1 - pow_op(constant(self.beta2), self.assignt)) / \
+                (1 - pow_op(constant(self.beta1), self.assignt))
+            # initialize m & v for globel variables
+            # also use constant to avoid initialize
+            self.m = []
+            self.assignm = []
+            self.v = []
+            self.assignv = []
+            for variable in variables_to_change:
+                self.m.append(constant(0))
+                self.v.append(constant(0))
+            # update global variables
+            for index, variable in enumerate(variables_to_change):
+                # construct the new value
+                g = variables_gradients[index]
+                nw_m = self.m[index]
+                mt = assign(nw_m, nw_m * self.beta1 + g * (1 - self.beta1))
+                nw_v = self.v[index]
+                vt = assign(nw_v, nw_v * self.beta2 + g * g * (1 - self.beta2))
+                newValue = variable - self.lrt * mt / \
+                    (sqrt_op(vt) + constant(self.epsilon))
+                # add the assign operator into change list
+                change_list.append(assign(variable, newValue))
             return pack(change_list)
 
 

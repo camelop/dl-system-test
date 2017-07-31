@@ -2,7 +2,7 @@
 from __future__ import absolute_import
 import numpy as np
 #reference: dlsys-autodiff
-variables = {}
+variable_to_node = {}
 
 
 class Node(object):
@@ -326,11 +326,12 @@ class VariableOp(Op):
         # insert new node to global dict
         if dtype is not None:
             if isinstance(initial_value, np.ndarray):
-                variables[new_node] = initial_value.astype(dtype)
+                variable_to_node[new_node] = initial_value.astype(dtype)
             else:
-                variables[new_node] = np.array(initial_value).astype(dtype)
+                variable_to_node[new_node] = np.array(
+                    initial_value).astype(dtype)
         else:
-            variables[new_node] = initial_value
+            variable_to_node[new_node] = initial_value
         new_node.name = name
         return new_node
 
@@ -572,6 +573,40 @@ class LogOp(Op):
         return [adapt(output_grad / node.inputs[0], node.inputs[0])]
 
 
+class SqrtOp(Op):
+    def __call__(self, node_A):
+        """Creates a node that represents np.sqrt(node_A)."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Sqrt(%s)" % (node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        output_val = np.sqrt(input_vals[0])
+        return output_val
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
+class PowOp(Op):
+    def __call__(self, node_A, node_B):
+        """Creates a node that represents np.pow(node_A, node_B)."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "Pow(%s,%s)" % (node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        output_val = np.power(input_vals[0], input_vals[1])
+        return output_val
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
 def softmax_func(y):
     expy = np.exp(y)
     softmax = expy / np.sum(expy, axis=-1, keepdims=True)
@@ -638,7 +673,7 @@ class VariablesInitOp(Op):
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 0
-        for key, value in variables.items():
+        for key, value in variable_to_node.items():
             key.const_attr = value
         return 0  # as the signal of success
 
@@ -660,7 +695,8 @@ class AssignOp(Op):
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
-        assert isinstance(node.const_attr.op, VariableOp)
+        assert isinstance(node.const_attr.op, VariableOp) \
+            or isinstance(node.const_attr.op, ConstantOp)
         node.const_attr.const_attr = input_vals[0]
         return input_vals[0]
 
@@ -768,6 +804,8 @@ constant = ConstantOp()
 assign = AssignOp()
 exp = ExpOp()
 log = LogOp()
+sqrt_op = SqrtOp()
+pow_op = PowOp()
 equal = EqualOp()
 argmax = ArgMaxOp()
 cast = CastOp()
