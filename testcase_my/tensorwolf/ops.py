@@ -681,6 +681,54 @@ class SoftmaxOp(Op):
         raise NotImplementedError
 
 
+class Conv2DOp(Op):
+    def __call__(self, node_A, node_B, strides=[1, 1, 1, 1], padding='SAME', name=None):
+        assert padding == 'SAME'  # 'VALID' not supported
+        new_node = op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.const_attr = strides
+        if name is None:
+            new_node.name = "Conv2D(%s,filter=%s)" % (node_A.name, node_B.name)
+        else:
+            new_node.name = name
+        return new_node
+
+    def compute(self, node, input_vals):
+        # I invent this...
+
+    def gradient(self, node, output_grad):
+        return [conv2d_g_A(output_grad, node.inputs[0], node.inputs[1], node.const_attr),
+                conv2d_g_B(output_grad, node.inputs[0], node.inputs[1], node.const_attr)]
+
+
+class Conv2DGradientNodeAOp(Op):
+    def __call__(self, node_grad, node_A, node_B, strides):
+        new_node = op.__call__(self)
+        new_node.inputs = [node_grad, node_A, node_B]
+        new_node.const_attr = strides
+        return new_node
+
+    def compute(self, node, input_vals):
+        # I invent this...
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
+class Conv2DGradientNodeBOp(Op):
+    def __call__(self, node_grad, node_A, node_B, strides):
+        new_node = op.__call__(self)
+        new_node.inputs = [node_grad, node_A, node_B]
+        new_node.const_attr = strides
+        return new_node
+
+    def compute(self, node, input_vals):
+        # I invent this...
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
 '''
     Functional Operators Below
 '''
@@ -815,6 +863,9 @@ relu = ReluOp()
 relu_gradient_op = ReluGradientOp()
 softmax_op = SoftmaxOp()
 softmax_cross_entropy_op = SoftmaxCrossEntropyOp()
+conv2d_op = Conv2DOp()
+conv2d_g_A = Conv2DGradientNodeAOp()
+conv2d_g_B = Conv2DGradientNodeBOp()
 matmul = MatMulOp()
 placeholder = PlaceholderOp()
 oneslike_op = OnesLikeOp()
