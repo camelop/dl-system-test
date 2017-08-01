@@ -348,6 +348,8 @@ class ConstantOp(Op):
     def __call__(self, initial_value, dtype=None, shape=None, name="Const"):
         """Creates a constant node."""
         new_node = Op.__call__(self)
+        if not isinstance(initial_value, np.ndarray) and (shape is not None):
+            initial_value = np.ones(shape=shape) * initial_value
         new_node.const_attr = np.array(
             initial_value).reshape(shape).astype(dtype)
         new_node.name = name
@@ -538,6 +540,27 @@ class BroadcastToOp(Op):
         return [grad_A, grad_B]
 
 
+class ReshapeOp(Op):
+    def __call__(self, node_A, shape):
+        """Creates a node that represents np.exp(node_A)."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.const_attr = shape
+        new_node.name = "Reshape(%s, shape=%s)" % (node_A.name, shape)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        if isinstance(node.const_attr, Node):
+            output_val = np.reshape(input_vals[0], node.const_attr.shape)
+        else:
+            output_val = np.reshape(input_vals[0], tuple(node.const_attr))
+        return output_val
+
+    def gradient(self, node, output_grad):
+        return [reshape(output_grad, node.inputs[0])]
+
+
 class ExpOp(Op):
     def __call__(self, node_A):
         """Creates a node that represents np.exp(node_A)."""
@@ -674,7 +697,10 @@ class VariablesInitOp(Op):
     def compute(self, node, input_vals):
         assert len(input_vals) == 0
         for key, value in variable_to_node.items():
-            key.const_attr = value
+            if isinstance(value, Node):
+                key.const_attr = value.const_attr
+            else:
+                key.const_attr = value
         return 0  # as the signal of success
 
     def gradient(self, node, output_grad):
