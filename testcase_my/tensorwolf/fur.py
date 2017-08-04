@@ -135,3 +135,5 @@ class nn(object):
             return softmax_cross_entropy_op(logits, labels)
 
     softmax_cross_entropy_with_logits = SoftmaxCrossEntropyWithLogitsOp()
+    conv2d = conv2d_op
+    max_pool = max_pool

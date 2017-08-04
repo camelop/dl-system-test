@@ -1,7 +1,7 @@
 """ define the behaviors of nodes """
 from __future__ import absolute_import
 import numpy as np
-#reference: dlsys-autodiff
+# reference: dlsys-autodiff
 variable_to_node = {}
 
 
@@ -92,12 +92,13 @@ class Node(object):
         """Allow print to display node name."""
         return self.name
 
-    # I have not figured out how to import these two from each other. TODO
     def eval(self, feed_dict):
         """Calculate the value of this node by running a session immediately."""
         import tensorwolf.executor as executor
         ex = executor.Executor(eval_node_list=[self])
         return ex.run(feed_dict=feed_dict)[0]
+
+    run = eval
 
 
 class Op(object):
@@ -542,7 +543,7 @@ class BroadcastToOp(Op):
 
 class ReshapeOp(Op):
     def __call__(self, node_A, shape):
-        """Creates a node that represents np.exp(node_A)."""
+        """Creates a node that represents np.reshape(node_A)."""
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
         new_node.const_attr = shape
@@ -551,14 +552,28 @@ class ReshapeOp(Op):
 
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
-        if isinstance(node.const_attr, Node):
-            output_val = np.reshape(input_vals[0], node.const_attr.shape)
-        else:
-            output_val = np.reshape(input_vals[0], tuple(node.const_attr))
+        output_val = np.reshape(input_vals[0], tuple(node.const_attr))
         return output_val
 
     def gradient(self, node, output_grad):
-        return [reshape(output_grad, node.inputs[0])]
+        return [reshape_extend(output_grad, node.inputs[0])]
+
+
+class ReshapeExtendedOp(Op):
+    def __call__(self, node_A, node_B):
+        """Creates a node that represents np.reshape(node_A) to node_B.shape ."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "Reshape(%s, shape=%s)" % (node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        output_val = np.reshape(input_vals[0], input_vals[1].shape)
+        return output_val
+
+    def gradient(self, node, output_grad):
+        return [reshape_extend(output_grad, node.inputs[0]), zeroslike_op(node.inputs[1])]
 
 
 class ExpOp(Op):
@@ -681,49 +696,268 @@ class SoftmaxOp(Op):
         raise NotImplementedError
 
 
+def zero_padding_func(ori, up, down, left, right):
+    ret = np.zeros([ori.shape[0], ori.shape[1] + up + down,
+                    ori.shape[2] + left + right, ori.shape[3]])
+    ret[:, up:up + ori.shape[1], left:left + ori.shape[2], :] = ori[:, :, :, :]
+    return ret
+
+
+def get_patch(ori, i, j, f_h, f_w, strides, i_c=None):
+    if i_c is None:
+        return ori[:, i * strides[1]:i * strides[1] + f_h, j * strides[2]:j * strides[2] + f_w, :]
+    else:
+        return ori[:, i * strides[1]:i * strides[1] + f_h, j * strides[2]:j * strides[2] + f_w, i_c]
+
+
 class Conv2DOp(Op):
     def __call__(self, node_A, node_B, strides=[1, 1, 1, 1], padding='SAME', name=None):
         assert padding == 'SAME'  # 'VALID' not supported
-        new_node = op.__call__(self)
+        new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.const_attr = strides
+        new_node.const_attr = (strides, padding)
         if name is None:
             new_node.name = "Conv2D(%s,filter=%s)" % (node_A.name, node_B.name)
         else:
             new_node.name = name
         return new_node
 
+    @profile
     def compute(self, node, input_vals):
-        # I invent this...
+        # check shape
+        f_h = input_vals[1].shape[0]
+        f_w = input_vals[1].shape[1]
+        i_c = input_vals[1].shape[2]
+        o_c = input_vals[1].shape[3]
+        i_h = input_vals[0].shape[1]
+        i_w = input_vals[0].shape[2]
+        batchs = input_vals[0].shape[0]
+        assert i_c == input_vals[0].shape[3]
+        # zero padding
+        strides = node.const_attr[0]
+        if node.const_attr[1] == 'SAME':
+            z_h = (i_h - 1) * strides[1] + f_h
+            z_w = (i_w - 1) * strides[2] + f_w
+            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
+                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
+        else:
+            raise NotImplementedError
+        '''
+        print("i_size", i_h, i_w)
+        print("z_size:", z_h, z_w)
+        '''
+        # calculate the output
+        output_val = np.zeros([batchs, i_h, i_w, o_c])
+        for c in range(i_c):
+            for i in range(i_h):
+                for j in range(i_w):
+                    output_val[:, i, j, :] += np.sum(
+                        get_patch(z, i, j, f_h, f_w, strides, c).reshape(
+                            [batchs, f_h, f_w, 1])
+                        * input_vals[1][:, :, c,
+                                        :].reshape([1, f_h, f_w, o_c]),
+                        axis=(1, 2))
+        return output_val
 
     def gradient(self, node, output_grad):
-        return [conv2d_g_A(output_grad, node.inputs[0], node.inputs[1], node.const_attr),
-                conv2d_g_B(output_grad, node.inputs[0], node.inputs[1], node.const_attr)]
+        return [conv2d_g_A(node.inputs[0], node.inputs[1], output_grad, node.const_attr),
+                conv2d_g_B(node.inputs[0], node.inputs[1], output_grad, node.const_attr)]
 
 
 class Conv2DGradientNodeAOp(Op):
-    def __call__(self, node_grad, node_A, node_B, strides):
-        new_node = op.__call__(self)
-        new_node.inputs = [node_grad, node_A, node_B]
-        new_node.const_attr = strides
+    def __call__(self,  node_A, node_B, node_grad, stridesAndPadding):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B, node_grad]
+        new_node.const_attr = stridesAndPadding
         return new_node
 
+    @profile
     def compute(self, node, input_vals):
-        # I invent this...
+        '''
+            This will not work if strides != [1, 1, 1, 1]
+        '''
+        # check shape
+        f_h = input_vals[1].shape[0]
+        f_w = input_vals[1].shape[1]
+        i_c = input_vals[1].shape[2]
+        o_c = input_vals[1].shape[3]
+        i_h = input_vals[0].shape[1]
+        i_w = input_vals[0].shape[2]
+        batchs = input_vals[0].shape[0]
+        # zero padding
+        strides = node.const_attr[0]
+        assert strides == [1, 1, 1, 1]
+        if node.const_attr[1] == 'SAME':
+            z_h = (i_h - 1) * strides[1] + f_h
+            z_w = (i_w - 1) * strides[2] + f_w
+            z = zero_padding_func(ori=input_vals[2], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
+                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
+        else:
+            raise NotImplementedError
+        # calculate the output
+        output_val = np.zeros([batchs, i_h, i_w, i_c])
+        for c in range(o_c):
+            for i in range(i_h):
+                for j in range(i_w):
+                    output_val[:, i, j, :] += np.sum(
+                        get_patch(z, i, j, f_h, f_w, strides, c).reshape(
+                            [batchs, f_h, f_w, 1])
+                        * np.rot90(input_vals[1][:, :, :, c].reshape([1, f_h, f_w, i_c]),
+                                   k=2, axes=(1, 2)),
+                        axis=(1, 2))
+        return output_val
 
     def gradient(self, node, output_grad):
         raise NotImplementedError
 
 
 class Conv2DGradientNodeBOp(Op):
-    def __call__(self, node_grad, node_A, node_B, strides):
-        new_node = op.__call__(self)
-        new_node.inputs = [node_grad, node_A, node_B]
-        new_node.const_attr = strides
+    def __call__(self, node_A, node_B, node_grad, stridesAndPadding):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B, node_grad]
+        new_node.const_attr = stridesAndPadding
         return new_node
 
+    @profile
     def compute(self, node, input_vals):
-        # I invent this...
+        '''
+            This will not work if strides != [1, 1, 1, 1]
+        '''
+        # check shape
+        f_h = input_vals[1].shape[0]
+        f_w = input_vals[1].shape[1]
+        i_c = input_vals[1].shape[2]
+        o_c = input_vals[1].shape[3]
+        i_h = input_vals[0].shape[1]
+        i_w = input_vals[0].shape[2]
+        batchs = input_vals[0].shape[0]
+        # zero padding
+        strides = node.const_attr[0]
+        assert strides == [1, 1, 1, 1]
+        if node.const_attr[1] == 'SAME':
+            z_h = (i_h - 1) * strides[1] + f_h
+            z_w = (i_w - 1) * strides[2] + f_w
+            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
+                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
+        else:
+            raise NotImplementedError
+        output_val = np.zeros([f_h, f_w, i_c, o_c])
+        for ic in range(i_c):
+            for oc in range(o_c):
+                for i in range(f_h):
+                    for j in range(f_w):
+                        output_val[i, j, ic, oc] += np.sum(
+                            get_patch(z, i, j, i_h, i_w, strides, ic)
+                            * np.rot90(
+                                input_vals[2][:, :, :, oc],
+                                k=2, axes=(1, 2)))
+        return output_val
+
+    def gradient(self, node, output_grad):
+        raise NotImplementedError
+
+
+class MaxPoolOp(Op):
+    def __call__(self, node_A, ksize, strides, padding='SAME'):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "MaxPool(%s)" % (node_A.name)
+        new_node.const_attr = (ksize, strides, padding)
+        return new_node
+
+    @profile
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        # check shape
+        batchs = input_vals[0].shape[0]
+        i_h = input_vals[0].shape[1]
+        i_w = input_vals[0].shape[2]
+        i_c = input_vals[0].shape[3]
+        # zero padding
+        strides = node.const_attr[1]
+        ksize = node.const_attr[0]
+        o_h = (i_h - 1) // strides[1] + 1
+        o_w = (i_w - 1) // strides[2] + 1
+        if node.const_attr[2] == 'SAME':
+            z_h = ((i_h - 1) // strides[1]) * strides[1] + ksize[1]
+            z_w = ((i_w - 1) // strides[2]) * strides[2] + ksize[2]
+            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
+                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
+        else:
+            raise NotImplementedError
+        output_val = np.zeros([batchs, o_h, o_w, i_c])
+        for i in range(o_h):
+            for j in range(o_w):
+                output_val[:, i, j, :] = np.max(
+                    get_patch(z, i, j, ksize[1], ksize[2], strides), axis=(1, 2))
+        return output_val
+
+    def gradient(self, node, output_grad):
+        return [max_pool_g(node.inputs[0], output_grad, node.const_attr)]
+
+
+class MaxPoolGradientOp(Op):
+    def __call__(self, node_A, node_grad, const_attr):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_grad]
+        new_node.const_attr = const_attr
+        return new_node
+
+    @profile
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        # check shape
+        batchs = input_vals[0].shape[0]
+        i_h = input_vals[0].shape[1]
+        i_w = input_vals[0].shape[2]
+        i_c = input_vals[0].shape[3]
+        # zero padding
+        strides = node.const_attr[1]
+        ksize = node.const_attr[0]
+        o_h = (i_h - 1) // strides[1] + 1
+        o_w = (i_w - 1) // strides[2] + 1
+        if node.const_attr[2] == 'SAME':
+            z_h = ((i_h - 1) // strides[1]) * strides[1] + ksize[1]
+            z_w = ((i_w - 1) // strides[2]) * strides[2] + ksize[2]
+            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
+                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
+        else:
+            raise NotImplementedError
+        '''
+        print("i_size", i_h, i_w)
+        print("o_size:", o_h, o_w)
+        print("z_size:", z_h, z_w)
+        '''
+        '''
+        # all up date version
+        output_val = np.zeros((batchs, z_h, z_w, i_c))
+        for i in range(o_h):
+            for j in range(o_w):
+                nw = get_patch(z, i, j, ksize[1], ksize[2], strides)
+                valid = np.equal(nw, np.max(nw, axis=(1, 2), keepdims=True))
+                get_patch(output_val, i, j, ksize[1], ksize[2], strides)[
+                    :] = valid * input_vals[1][:, i:i + 1, j:j + 1, :]
+        up = (z_h - i_h) // 2
+        left = (z_w - i_w) // 2
+        output_val = output_val[:, up:up + i_h, left:left + i_w, :]
+        '''
+        '''
+        # update one version
+        output_val = np.zeros((batchs, z_h, z_w, i_c))
+        for b in range(batchs):
+            for c in range(i_c):
+                for i in range(o_h):
+                    for j in range(o_w):
+                        get_patch(output_val, i, j, ksize[1], ksize[2], strides)[b, :, :, c].flat[
+                            np.argmax(
+                                get_patch(z, i, j, ksize[1], ksize[2], strides)[b, :, :, c])
+                        ] = input_vals[1][b, i, j, c]
+        up = (z_h - i_h) // 2
+        left = (z_w - i_w) // 2
+        output_val = output_val[:, up:up + i_h, left:left + i_w, :]
+        '''
+        # TODO
+        return output_val
 
     def gradient(self, node, output_grad):
         raise NotImplementedError
@@ -866,6 +1100,8 @@ softmax_cross_entropy_op = SoftmaxCrossEntropyOp()
 conv2d_op = Conv2DOp()
 conv2d_g_A = Conv2DGradientNodeAOp()
 conv2d_g_B = Conv2DGradientNodeBOp()
+max_pool = MaxPoolOp()
+max_pool_g = MaxPoolGradientOp()
 matmul = MatMulOp()
 placeholder = PlaceholderOp()
 oneslike_op = OnesLikeOp()
@@ -888,3 +1124,5 @@ argmax = ArgMaxOp()
 cast = CastOp()
 adapt = AdaptShapeOp()
 pack = PackOp()
+reshape = ReshapeOp()
+reshape_extend = ReshapeExtendedOp()

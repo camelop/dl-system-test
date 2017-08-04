@@ -1,5 +1,7 @@
 import numpy as np
-a = np.ones((3, 4, 5))
-b = np.zeros((3, 4, 5))
-b[0:2, 0:3, 1:4] = a[0:2, 0:3, 1:4]
-print(b)
+a = np.random.normal(size=(2, 2, 2))
+a = np.ones((2, 2, 2))
+print(a)
+print(np.argmax(a, axis=2))
+a.flat[np.argmax(a, axis=2)] = 250
+print(a)
