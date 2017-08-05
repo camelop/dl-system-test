@@ -21,7 +21,7 @@ class Executor(object):
         self.eval_node_list = eval_node_list
         self.topo_order = find_topo_sort(self.eval_node_list)
 
-    @profile
+    # profile
     def run(self, feed_dict):
         """
         Parameters

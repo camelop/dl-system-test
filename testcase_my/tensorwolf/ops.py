@@ -722,7 +722,7 @@ class Conv2DOp(Op):
             new_node.name = name
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         # check shape
         f_h = input_vals[1].shape[0]
@@ -771,7 +771,7 @@ class Conv2DGradientNodeAOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         '''
             This will not work if strides != [1, 1, 1, 1]
@@ -818,7 +818,7 @@ class Conv2DGradientNodeBOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         '''
             This will not work if strides != [1, 1, 1, 1]
@@ -865,7 +865,7 @@ class MaxPoolOp(Op):
         new_node.const_attr = (ksize, strides, padding)
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
         # check shape
@@ -903,7 +903,7 @@ class MaxPoolGradientOp(Op):
         new_node.const_attr = const_attr
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 2
         # check shape
@@ -934,14 +934,15 @@ class MaxPoolGradientOp(Op):
         for i in range(o_h):
             for j in range(o_w):
                 nw = get_patch(z, i, j, ksize[1], ksize[2], strides)
-                valid = np.equal(nw, np.max(nw, axis=(1, 2), keepdims=True))
+                valid = np.equal(nw, np.max(
+                    nw, axis=(1, 2), keepdims=True)).astype(np.float32)
                 get_patch(output_val, i, j, ksize[1], ksize[2], strides)[
-                    :] = valid * input_vals[1][:, i:i + 1, j:j + 1, :]
+                    :, :, :, :] = valid * input_vals[1][:, i:i + 1, j:j + 1, :]
         up = (z_h - i_h) // 2
         left = (z_w - i_w) // 2
         output_val = output_val[:, up:up + i_h, left:left + i_w, :]
         '''
-        '''
+
         # update one version
         output_val = np.zeros((batchs, z_h, z_w, i_c))
         for b in range(batchs):
@@ -955,7 +956,7 @@ class MaxPoolGradientOp(Op):
         up = (z_h - i_h) // 2
         left = (z_w - i_w) // 2
         output_val = output_val[:, up:up + i_h, left:left + i_w, :]
-        '''
+
         # TODO
         return output_val
 
