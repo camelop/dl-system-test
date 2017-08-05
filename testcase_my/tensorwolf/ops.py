@@ -297,8 +297,7 @@ class MatMulOp(Op):
                 node.inputs[1], output_grad, trans_A=False, trans_B=True)
             rhs_grad = matmul(
                 output_grad, node.inputs[0], trans_A=True, trans_B=False)
-        return [adapt(lhs_grad, node.inputs[0]),
-                adapt(rhs_grad, node.inputs[1])]
+        return [lhs_grad, rhs_grad]
 
 
 class PlaceholderOp(Op):
@@ -591,7 +590,7 @@ class ExpOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [adapt(output_grad * exp(node.inputs[0]), node.inputs[0])]
+        return [output_grad * exp(node.inputs[0])]
 
 
 class LogOp(Op):
@@ -608,7 +607,7 @@ class LogOp(Op):
         return output_val
 
     def gradient(self, node, output_grad):
-        return [adapt(output_grad / node.inputs[0], node.inputs[0])]
+        return [output_grad / node.inputs[0]]
 
 
 class SqrtOp(Op):
@@ -676,7 +675,7 @@ class SoftmaxCrossEntropyOp(Op):
             output_grad / \
             reduce_sum(oneslike_op(node.inputs[0]), axis=0, keep_dims=True)
         grad_B = zeroslike_op(node.inputs[1])
-        return [adapt(grad_A, node.inputs[0]), grad_B]
+        return [grad_A, grad_B]
 
 
 class SoftmaxOp(Op):
