@@ -72,18 +72,19 @@ nw = time.time()
 # train and eval
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for i in range(200):
+    for i in range(51):
+        print("i: ", i)
         batch = mnist.train.next_batch(100)
         if i % 50 == 0:
             train_accuracy = accuracy.eval(feed_dict={x: batch[0],
                                                       y_: batch[1]})
             print('Step %d, trainning accuracy %g' % (i, train_accuracy))
         train_step.run(feed_dict={x: batch[0], y_: batch[1]})
-
+    '''
     ans = accuracy.eval(feed_dict={x: mnist.test.images,
                                    y_: mnist.test.labels})
     print('Test accuracy: %g' % ans)
-
+    '''
     print("Time: ", time.time() - nw)
 
 #    assert ans > 0.88

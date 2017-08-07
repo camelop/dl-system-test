@@ -84,7 +84,7 @@ with tf.Session() as sess:
             train_accuracy = accuracy.eval(feed_dict={x: batch[0],
                                                       y_: batch[1]})
             print('Step %d, trainning accuracy %g' % (i, train_accuracy))
-        p = sess.run([grad], feed_dict={
+        p = sess.run([cross_entropy], feed_dict={
                      x: batch[0], y_: batch[1]})[0]
         np.set_printoptions(threshold=np.nan)
         print(np.sum(p))

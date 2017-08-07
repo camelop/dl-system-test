@@ -1,6 +1,7 @@
 """ define the behaviors of nodes """
 from __future__ import absolute_import
 import numpy as np
+from scipy import signal
 # reference: dlsys-autodiff
 variable_to_node = {}
 
@@ -709,6 +710,9 @@ def get_patch(ori, i, j, f_h, f_w, strides, i_c=None):
         return ori[:, i * strides[1]:i * strides[1] + f_h, j * strides[2]:j * strides[2] + f_w, i_c]
 
 
+import tensorwolf.c_ops as c_ops
+
+
 class Conv2DOp(Op):
     def __call__(self, node_A, node_B, strides=[1, 1, 1, 1], padding='SAME', name=None):
         assert padding == 'SAME'  # 'VALID' not supported
@@ -721,42 +725,14 @@ class Conv2DOp(Op):
             new_node.name = name
         return new_node
 
-    # profile
+    @profile
     def compute(self, node, input_vals):
-        # check shape
-        f_h = input_vals[1].shape[0]
-        f_w = input_vals[1].shape[1]
-        i_c = input_vals[1].shape[2]
-        o_c = input_vals[1].shape[3]
-        i_h = input_vals[0].shape[1]
-        i_w = input_vals[0].shape[2]
-        batchs = input_vals[0].shape[0]
-        assert i_c == input_vals[0].shape[3]
-        # zero padding
-        strides = node.const_attr[0]
-        if node.const_attr[1] == 'SAME':
-            z_h = (i_h - 1) * strides[1] + f_h
-            z_w = (i_w - 1) * strides[2] + f_w
-            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
-                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
-        else:
-            raise NotImplementedError
-        '''
-        print("i_size", i_h, i_w)
-        print("z_size:", z_h, z_w)
-        '''
-        # calculate the output
-        output_val = np.zeros([batchs, i_h, i_w, o_c])
-        for c in range(i_c):
-            for i in range(i_h):
-                for j in range(i_w):
-                    output_val[:, i, j, :] += np.sum(
-                        get_patch(z, i, j, f_h, f_w, strides, c).reshape(
-                            [batchs, f_h, f_w, 1])
-                        * input_vals[1][:, :, c,
-                                        :].reshape([1, f_h, f_w, o_c]),
-                        axis=(1, 2))
-        return output_val
+        return c_ops.correlate2d(
+            input=input_vals[0],
+            filter=input_vals[1],
+            strides=node.const_attr[0],
+            padding=node.const_attr[1]
+        )
 
     def gradient(self, node, output_grad):
         return [conv2d_g_A(node.inputs[0], node.inputs[1], output_grad, node.const_attr),
@@ -770,41 +746,15 @@ class Conv2DGradientNodeAOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    # profile
+    @profile
     def compute(self, node, input_vals):
-        '''
-            This will not work if strides != [1, 1, 1, 1]
-        '''
-        # check shape
-        f_h = input_vals[1].shape[0]
-        f_w = input_vals[1].shape[1]
-        i_c = input_vals[1].shape[2]
-        o_c = input_vals[1].shape[3]
-        i_h = input_vals[0].shape[1]
-        i_w = input_vals[0].shape[2]
-        batchs = input_vals[0].shape[0]
-        # zero padding
-        strides = node.const_attr[0]
-        assert strides == [1, 1, 1, 1]
-        if node.const_attr[1] == 'SAME':
-            z_h = (i_h - 1) * strides[1] + f_h
-            z_w = (i_w - 1) * strides[2] + f_w
-            z = zero_padding_func(ori=input_vals[2], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
-                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
-        else:
-            raise NotImplementedError
-        # calculate the output
-        output_val = np.zeros([batchs, i_h, i_w, i_c])
-        for c in range(o_c):
-            for i in range(i_h):
-                for j in range(i_w):
-                    output_val[:, i, j, :] += np.sum(
-                        get_patch(z, i, j, f_h, f_w, strides, c).reshape(
-                            [batchs, f_h, f_w, 1])
-                        * np.rot90(input_vals[1][:, :, :, c].reshape([1, f_h, f_w, i_c]),
-                                   k=2, axes=(1, 2)),
-                        axis=(1, 2))
-        return output_val
+        return c_ops.correlate2d(
+            input=input_vals[2],
+            filter=np.rot90(np.transpose(
+                input_vals[1], (0, 1, 3, 2)), axes=(0, 1), k=2),
+            strides=[1, 1, 1, 1],
+            padding=node.const_attr[1]
+        )
 
     def gradient(self, node, output_grad):
         raise NotImplementedError
@@ -817,40 +767,15 @@ class Conv2DGradientNodeBOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    # profile
+    @profile
     def compute(self, node, input_vals):
-        '''
-            This will not work if strides != [1, 1, 1, 1]
-        '''
-        # check shape
-        f_h = input_vals[1].shape[0]
-        f_w = input_vals[1].shape[1]
-        i_c = input_vals[1].shape[2]
-        o_c = input_vals[1].shape[3]
-        i_h = input_vals[0].shape[1]
-        i_w = input_vals[0].shape[2]
-        batchs = input_vals[0].shape[0]
-        # zero padding
-        strides = node.const_attr[0]
-        assert strides == [1, 1, 1, 1]
-        if node.const_attr[1] == 'SAME':
-            z_h = (i_h - 1) * strides[1] + f_h
-            z_w = (i_w - 1) * strides[2] + f_w
-            z = zero_padding_func(ori=input_vals[0], up=(z_h - i_h) // 2, down=(z_h - i_h + 1) // 2,
-                                  left=(z_w - i_w) // 2, right=(z_w - i_w + 1) // 2)
-        else:
-            raise NotImplementedError
-        output_val = np.zeros([f_h, f_w, i_c, o_c])
-        for ic in range(i_c):
-            for oc in range(o_c):
-                for i in range(f_h):
-                    for j in range(f_w):
-                        output_val[i, j, ic, oc] += np.sum(
-                            get_patch(z, i, j, i_h, i_w, strides, ic)
-                            * np.rot90(
-                                input_vals[2][:, :, :, oc],
-                                k=2, axes=(1, 2)))
-        return output_val
+        # only handle "SAME"
+        assert node.const_attr[1] == "SAME"
+        return c_ops.conv2d_filter_gradient(
+            input=input_vals[0],
+            gradient=input_vals[2],
+            ori_filter=input_vals[1]
+        )
 
     def gradient(self, node, output_grad):
         raise NotImplementedError
@@ -864,7 +789,7 @@ class MaxPoolOp(Op):
         new_node.const_attr = (ksize, strides, padding)
         return new_node
 
-    # profile
+    @profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
         # check shape
@@ -902,7 +827,7 @@ class MaxPoolGradientOp(Op):
         new_node.const_attr = const_attr
         return new_node
 
-    # profile
+    @profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 2
         # check shape
@@ -943,7 +868,15 @@ class MaxPoolGradientOp(Op):
         '''
 
         # update one version
-        output_val = np.zeros((batchs, z_h, z_w, i_c))
+        output_val = np.zeros((batchs, z_h, z_w, i_c), dtype=np.float32)
+        c_ops.max_pool_gradient(
+            gradient=input_vals[1],
+            input=z,
+            output=output_val,
+            ksize=ksize,
+            strides=strides
+        )
+        '''
         for b in range(batchs):
             for c in range(i_c):
                 for i in range(o_h):
@@ -952,11 +885,12 @@ class MaxPoolGradientOp(Op):
                             np.argmax(
                                 get_patch(z, i, j, ksize[1], ksize[2], strides)[b, :, :, c])
                         ] = input_vals[1][b, i, j, c]
+        '''
+
         up = (z_h - i_h) // 2
         left = (z_w - i_w) // 2
         output_val = output_val[:, up:up + i_h, left:left + i_w, :]
 
-        # TODO
         return output_val
 
     def gradient(self, node, output_grad):
