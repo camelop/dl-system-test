@@ -1,10 +1,18 @@
 import ctypes
 import os
+import sys
 import numpy as np
+import platform
 
-cur_path = os.path.dirname(__file__)
-dll_path = os.path.join(cur_path, "c_kernel", "x64", "Release", "c_kernel.dll")
-c_kernel = ctypes.CDLL(dll_path)
+
+if platform.system() == 'Linux':
+    cur_path = sys.path[0]
+    dll_path = os.path.join(cur_path, "tensorwolf", "kernel.so")
+    c_kernel = ctypes.CDLL(dll_path)
+else:
+    cur_path = os.path.dirname(__file__)
+    dll_path = os.path.join(cur_path, "c_kernel", "x64", "Release", "c_kernel.dll")
+    c_kernel = ctypes.CDLL(dll_path)
 
 
 def zero_padding_func(ori, up, down, left, right):
