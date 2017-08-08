@@ -1,7 +1,7 @@
 """ define the behaviors of nodes """
 from __future__ import absolute_import
 import numpy as np
-from scipy import signal
+# from scipy import signal
 # reference: dlsys-autodiff
 variable_to_node = {}
 
