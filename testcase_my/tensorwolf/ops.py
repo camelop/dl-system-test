@@ -93,7 +93,7 @@ class Node(object):
         """Allow print to display node name."""
         return self.name
 
-    def eval(self, feed_dict):
+    def eval(self, feed_dict={}):
         """Calculate the value of this node by running a session immediately."""
         import tensorwolf.executor as executor
         ex = executor.Executor(eval_node_list=[self])
@@ -541,6 +541,31 @@ class BroadcastToOp(Op):
         return [grad_A, grad_B]
 
 
+class ProbShapeOp(Op):
+    def __call__(self, node_A, node_B):
+        """Creates a node that has the shape of node_A and filled with
+        one and zero with probability of node_b"""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "ProbShape(shape=%s,prob=%s)" % (
+            node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 2
+        output_val = (np.random.uniform(
+            size=input_vals[0].shape) < input_vals[1])
+        '''
+        print("prob: ", input_vals[1])
+        print("shape: ", output_val.shape)
+        print("mean:", np.mean(output_val))
+        '''
+        return output_val
+
+    def gradient(self, node, output_grad):
+        return [zeroslike_op(node.inputs[0]), zeroslike_op(node.inputs[1])]
+
+
 class ReshapeOp(Op):
     def __call__(self, node_A, shape):
         """Creates a node that represents np.reshape(node_A)."""
@@ -646,7 +671,7 @@ class PowOp(Op):
 
 
 def softmax_func(y):
-    expy = np.exp(y)
+    expy = np.exp(y - np.max(y, axis=-1, keepdims=True))
     softmax = expy / np.sum(expy, axis=-1, keepdims=True)
     return softmax
 
@@ -666,15 +691,14 @@ class SoftmaxCrossEntropyOp(Op):
         softmax = softmax_func(y)
         # change into axis=-1 to allow higher dimensions
         mid1 = y_ * np.log(softmax)
-        mid2 = -np.sum(mid1, axis=-1)
-        cross_entropy = np.mean(mid2)
-        output_val = cross_entropy
+        mid2 = -np.sum(mid1, axis=-1, keepdims=True)
+        # cross_entropy = np.mean(mid2)
+        output_val = mid2
         return output_val
 
     def gradient(self, node, output_grad):
-        grad_A = (softmax_op(node.inputs[0]) - node.inputs[1]) * \
-            output_grad / \
-            reduce_sum(oneslike_op(node.inputs[0]), axis=0, keep_dims=True)
+        grad_A = (softmax_op(node.inputs[0]) -
+                  node.inputs[1]) * output_grad
         grad_B = zeroslike_op(node.inputs[1])
         return [grad_A, grad_B]
 
@@ -725,7 +749,7 @@ class Conv2DOp(Op):
             new_node.name = name
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         return c_ops.correlate2d(
             input=input_vals[0],
@@ -746,7 +770,7 @@ class Conv2DGradientNodeAOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         return c_ops.correlate2d(
             input=input_vals[2],
@@ -767,7 +791,7 @@ class Conv2DGradientNodeBOp(Op):
         new_node.const_attr = stridesAndPadding
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         # only handle "SAME"
         assert node.const_attr[1] == "SAME"
@@ -789,7 +813,7 @@ class MaxPoolOp(Op):
         new_node.const_attr = (ksize, strides, padding)
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 1
         # check shape
@@ -827,7 +851,7 @@ class MaxPoolGradientOp(Op):
         new_node.const_attr = const_attr
         return new_node
 
-    @profile
+    # profile
     def compute(self, node, input_vals):
         assert len(input_vals) == 2
         # check shape
@@ -1045,6 +1069,7 @@ reduce_mean = ReduceMeanOp()
 reduceshapesum_op = ReduceShapeSumOp()
 reduceshapemean_op = ReduceShapeMeanOp()
 broadcastto_op = BroadcastToOp()
+probshape_op = ProbShapeOp()
 global_variables_initializer = VariablesInitOp()
 Variable = VariableOp()
 constant = ConstantOp()

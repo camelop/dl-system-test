@@ -1,4 +1,4 @@
-""" define the behaviors of excutor """
+# profile""" define the behaviors of excutor """
 from __future__ import absolute_import
 import numpy as np
 from tensorwolf.topo import *
@@ -21,7 +21,7 @@ class Executor(object):
         self.eval_node_list = eval_node_list
         self.topo_order = find_topo_sort(self.eval_node_list)
 
-    @profile
+    # profile
     def run(self, feed_dict):
         """
         Parameters
@@ -77,6 +77,14 @@ def gradients(output_node, node_list):
                 node_to_output_grads_list[node.inputs[i]] = []
             node_to_output_grads_list[node.inputs[i]].append(
                 input_grads_list[i])
+    '''
+    print("node_list: ")
+    for i in node_list:
+        print("  ", i)
+    print("node_to_output_grad")
+    for i in node_to_output_grad:
+        print("  ", i)
+    '''
     grad_node_list = [node_to_output_grad[node] for node in node_list]
     return grad_node_list
 

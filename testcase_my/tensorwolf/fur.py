@@ -8,8 +8,9 @@ float32 = np.float32
 float64 = np.float64
 
 
-def random_normal(shape, mean=0.0, stddev=1.0, dtype=float32, seed=None, name=None):
-    return_val = np.random.normal(loc=mean, scale=stddev, size=shape)
+def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None, name=None):
+    return_val = np.random.normal(
+        loc=mean, scale=stddev, size=shape).astype(dtype)
     # print(return_val)
     return return_val
 
@@ -41,6 +42,9 @@ class Session(object):
         return
 
 
+import tensorwolf.topo as topo
+
+
 class train(object):
     class Optimizer(object):
         def __init__(self):
@@ -58,7 +62,12 @@ class train(object):
             self.name = name
 
         def minimize(self, target):
-            variables_to_change = self.get_variables_list()
+            variables_prepare = self.get_variables_list()
+            variables_to_change = []
+            used_ones = topo.find_topo_sort(node_list=[target])
+            for v in variables_prepare:
+                if v in used_ones:
+                    variables_to_change.append(v)
             variables_gradients = gradients(target, variables_to_change)
             change_list = []
             for index, variable in enumerate(variables_to_change):
@@ -133,7 +142,20 @@ class nn(object):
     class SoftmaxCrossEntropyWithLogitsOp(Op):
         def __call__(self, logits, labels):
             return softmax_cross_entropy_op(logits, labels)
+            # to be honest the thing above is somehow bad
+            # here's an equal expression
+            # return (-reduce_sum(labels * log(nn.softmax(logits)), reduction_indices=[1]))
 
     softmax_cross_entropy_with_logits = SoftmaxCrossEntropyWithLogitsOp()
     conv2d = conv2d_op
     max_pool = max_pool
+
+    class DropoutOp(Op):
+        def __call__(self, node_A, node_B, name=None):
+            new_node = mul_op(node_A, probshape_op(node_A, node_B)) / node_B
+            if name is None:
+                name = "Dropout(%s,prob=%s)" % (node_A.name, node_B.name)
+            new_node.name = name
+            return new_node
+
+    dropout = DropoutOp()
