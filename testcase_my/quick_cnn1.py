@@ -1,13 +1,14 @@
 """ import your model here """
 import tensorflow as tf
-import tensorwolf as tf
+#import tensorwolf as tf
 import numpy as np
 """ your model should support the following code """
 
 
 def weight_variable(shape):
     initial = tf.random_normal(shape, stddev=0.1)
-    initial = tf.ones(shape) * 0.01
+    initial = np.ones(shape).astype(np.float32) * 0.01
+    initial[:, 0, ...] = -initial[:, 0, ...]
     return tf.Variable(initial)
 
 
@@ -29,7 +30,7 @@ def max_pool_2x2(x):
 x = tf.placeholder(tf.float32, shape=[None, 784])
 y_ = tf.placeholder(tf.float32, shape=[None, 10])
 
-magic_number = 2
+magic_number = 1
 # first layer
 W_conv1 = weight_variable([5, 5, 1, magic_number])
 b_conv1 = bias_variable([magic_number])
@@ -70,7 +71,7 @@ train_step = tf.train.GradientDescentOptimizer(1e-2).minimize(cross_entropy)
 correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-grad = tf.gradients(cross_entropy, [W_fc1])[0]
+grad = tf.gradients(cross_entropy, [W_conv2])[0]
 
 # Get the mnist dataset (use tensorflow here)
 from tensorflow.examples.tutorials.mnist import input_data
@@ -80,7 +81,7 @@ mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(1):
-        batch = mnist.train.next_batch(100, shuffle=False)
+        batch = mnist.train.next_batch(2, shuffle=False)
         if i % 50 == 33:
             train_accuracy = accuracy.eval(feed_dict={x: batch[0],
                                                       y_: batch[1]})
@@ -88,6 +89,7 @@ with tf.Session() as sess:
         p = sess.run([grad], feed_dict={
                      x: batch[0], y_: batch[1]})[0]
         np.set_printoptions(threshold=np.nan)
+        # print(p)
         print(np.sum(np.abs(p)))
 '''
     ans = accuracy.eval(feed_dict={x: mnist.test.images,

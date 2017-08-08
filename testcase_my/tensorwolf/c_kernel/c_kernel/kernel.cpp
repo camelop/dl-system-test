@@ -1,22 +1,23 @@
 #define DLLEXPORT extern "C" __declspec(dllexport)
-#include <iostream>
+// #include <iostream>
 
+#define FLOAT_TYPE float
 // Rho Aias!!!
 	
 DLLEXPORT 
 int correlate2d(
-		float* z,
+		FLOAT_TYPE* z,
 		int batchs,
 		int z_h,
 		int z_w,
 		int i_c,
 		int h_step,
 		int w_step,
-		float* f,
+		FLOAT_TYPE* f,
 		int f_h,
 		int f_w,
 		int o_c,
-		float* o,
+		FLOAT_TYPE* o,
 		int o_h,
 		int o_w
 	) {
@@ -35,27 +36,27 @@ int correlate2d(
 
 	//std::cout << "Receive" << std::endl;
 	for (int b = 0; b < batchs; ++b) {
-		float* o_b = o + b*o_b_size;
-		float* z_b = z + b*z_b_size;
+		FLOAT_TYPE* o_b = o + b*o_b_size;
+		FLOAT_TYPE* z_b = z + b*z_b_size;
 
 		for (int oh = 0; oh < o_h; ++oh) {
-			float* o_oh = o_b + oh*o_oh_size;
-			float* z_oh = z_b + oh*z_oh_size;
+			FLOAT_TYPE* o_oh = o_b + oh*o_oh_size;
+			FLOAT_TYPE* z_oh = z_b + oh*z_oh_size;
 
 			for (int ow = 0; ow < o_w; ++ow) {
-				float* o_ow = o_oh + ow*o_c;
-				float* z_ow = z_oh + ow*z_ow_size;
+				FLOAT_TYPE* o_ow = o_oh + ow*o_c;
+				FLOAT_TYPE* z_ow = z_oh + ow*z_ow_size;
 
 				for (int fh = 0; fh < f_h; ++fh) {
-					float* f_fh = f + fh * f_fh_size;
-					float* z_fh = z_ow + fh * z_fh_size;
+					FLOAT_TYPE* f_fh = f + fh * f_fh_size;
+					FLOAT_TYPE* z_fh = z_ow + fh * z_fh_size;
 
 					for (int fw = 0; fw < f_w; ++fw) {
-						float* f_fw = f_fh + fw * f_fw_size;
-						float* z_fw = z_fh + fw * i_c;
+						FLOAT_TYPE* f_fw = f_fh + fw * f_fw_size;
+						FLOAT_TYPE* z_fw = z_fh + fw * i_c;
 
 						for (int ic = 0; ic < i_c; ++ic) {
-							float* f_ic = f_fw + ic * o_c;
+							FLOAT_TYPE* f_ic = f_fw + ic * o_c;
 
 							for (int oc = 0; oc < o_c; ++oc) {
 								// o[b][oh][ow][oc] += z[b][ih][iw][ic] * f[fh][fw][ic][oc]
@@ -74,16 +75,16 @@ int correlate2d(
 
 DLLEXPORT
 int conv2d_filter_gradient(
-		float* z,
+		FLOAT_TYPE* z,
 		int batchs,
 		int z_h,
 		int z_w,
 		int i_c,
-		float* f,
+		FLOAT_TYPE* f,
 		int f_h,
 		int f_w,
 		int o_c,
-		float* o,
+		FLOAT_TYPE* o,
 		int o_h,
 		int o_w
 	) {
@@ -100,27 +101,27 @@ int conv2d_filter_gradient(
 	int f_fh_size = f_w*o_c;
 	
 	for (int b = 0; b < batchs; ++b) {
-		float* z_b = z + b*z_b_size;
-		float* f_b = f + b*f_b_size;
+		FLOAT_TYPE* z_b = z + b*z_b_size;
+		FLOAT_TYPE* f_b = f + b*f_b_size;
 
 		for (int oh = 0; oh < o_h; ++oh) {
-			float* o_oh = o + oh*o_oh_size;
-			float* z_oh = z_b + oh*z_oh_size;
+			FLOAT_TYPE* o_oh = o + oh*o_oh_size;
+			FLOAT_TYPE* z_oh = z_b + oh*z_oh_size;
 
 			for (int ow = 0; ow < o_w; ++ow) {
-				float* o_ow = o_oh + ow*o_ow_size;
-				float* z_ow = z_oh + ow*i_c;
+				FLOAT_TYPE* o_ow = o_oh + ow*o_ow_size;
+				FLOAT_TYPE* z_ow = z_oh + ow*i_c;
 
 				for (int fh = 0; fh < f_h; ++fh) {
-					float* z_fh = z_ow + fh *z_fh_size;
-					float* f_fh = f_b + fh*f_fh_size;
+					FLOAT_TYPE* z_fh = z_ow + fh *z_fh_size;
+					FLOAT_TYPE* f_fh = f_b + fh*f_fh_size;
 
 					for (int fw = 0; fw < f_w; ++fw) {
-						float* z_fw = z_fh + fw *i_c;
-						float* f_fw = f_fh + fw *o_c;
+						FLOAT_TYPE* z_fw = z_fh + fw *i_c;
+						FLOAT_TYPE* f_fw = f_fh + fw *o_c;
 
 						for (int ic = 0; ic < i_c; ++ic) {
-							float* o_ic = o_ow + ic*o_c;
+							FLOAT_TYPE* o_ic = o_ow + ic*o_c;
 
 							for (int oc = 0; oc < o_c; ++oc) {
 								// o[oh][ow][ic][oc] += z[b][oh+fh][ow+fw][ic] * f[b][fh][fw][oc]
@@ -138,15 +139,15 @@ int conv2d_filter_gradient(
 
 DLLEXPORT
 int max_pool_gradient(
-		float* g,
+		FLOAT_TYPE* g,
 		int batchs,
 		int g_h,
 		int g_w,
 		int i_c,
-		float* o,
+		FLOAT_TYPE* o,
 		int h_step,
 		int w_step,
-		float* z,
+		FLOAT_TYPE* z,
 		int z_h,
 		int z_w
 	) {
@@ -158,26 +159,26 @@ int max_pool_gradient(
 	int z_h_size = z_w*i_c;
 
 	for (int b = 0; b < batchs; ++b) {
-		float* g_b = g + b*g_b_size;
-		float* z_b = z + b*z_b_size;
+		FLOAT_TYPE* g_b = g + b*g_b_size;
+		FLOAT_TYPE* z_b = z + b*z_b_size;
 
 		for (int gh = 0; gh < g_h; ++gh) {
-			float* g_gh = g_b + gh*g_gh_size;
-			float* z_gh = z_b + gh*z_gh_size;
+			FLOAT_TYPE* g_gh = g_b + gh*g_gh_size;
+			FLOAT_TYPE* z_gh = z_b + gh*z_gh_size;
 
 			for (int gw = 0; gw < g_w; ++gw) {
-				float* g_gw = g_gh + gw * i_c;
-				float* z_gw = z_gh + gw * z_gw_size;
+				FLOAT_TYPE* g_gw = g_gh + gw * i_c;
+				FLOAT_TYPE* z_gw = z_gh + gw * z_gw_size;
 
 				for (int ic = 0; ic < i_c; ++ic) {
-					float* z_ic = z_gw + ic;
-					float* max_loc = z_ic;
+					FLOAT_TYPE* z_ic = z_gw + ic;
+					FLOAT_TYPE* max_loc = z_ic;
 
 					for (int h = 0; h < h_step; ++h) {
-						float* z_h = z_ic + h*z_h_size;
+						FLOAT_TYPE* z_h = z_ic + h*z_h_size;
 
 						for (int w = 0; w < w_step; ++w) {
-							float* z_w = z_h + w*i_c;
+							FLOAT_TYPE* z_w = z_h + w*i_c;
 
 							if ((*z_w) > (*max_loc)) {
 								max_loc = z_w;

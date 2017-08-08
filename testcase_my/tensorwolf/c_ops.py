@@ -78,7 +78,8 @@ def conv2d_filter_gradient(input, gradient, ori_filter):
     i_h = input.shape[1]
     i_w = input.shape[2]
     i_c = input.shape[3]
-    f = np.rot90(gradient, axes=(1, 2), k=2)
+    f = gradient  # stupid me, it's just cor-relation. No rotation.
+    # print("f_shape: ", f.shape)
     f_h = f.shape[1]
     f_w = f.shape[2]
     o_c = f.shape[3]
@@ -91,6 +92,7 @@ def conv2d_filter_gradient(input, gradient, ori_filter):
     output = np.zeros((o_h, o_w, i_c, o_c), dtype=np.float32)
     z = z.astype(np.float32)
     f = f.astype(np.float32)
+    # print(z.shape, f.shape, output.shape)
     assert c_kernel.conv2d_filter_gradient(
         get_pointer(z),  # input's pointer as np.float32
         batchs,
