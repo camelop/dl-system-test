@@ -1,5 +1,5 @@
 OBJS = kernel.o
-CFLAGS = -Wall -o2 -g -fPIC
+CFLAGS = -O4 -fPIC
 kernel.so: kernel.o
 	g++ ${CFLAGS} -shared kernel.o -o kernel.so
 	rm kernel.o
