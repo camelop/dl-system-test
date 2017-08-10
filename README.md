@@ -14,6 +14,7 @@ testcase for [PPCA 2017](https://acm.sjtu.edu.cn/wiki/PPCA_2017#.E6.9C.BA.E5.99.
 | 8  | adam        | adam optimizer |
 | 9  | CNN 1       | simple CNN |
 | 10 | CNN 2       | simple CNN with dropout |
+(an extra test was added later to test the correctness of CNN)
 
 # How to run test
 ```bash
