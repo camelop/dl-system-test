@@ -35,39 +35,50 @@ int correlate2d(
 	int z_fh_size = z_w*i_c;
 
 	//std::cout << "Receive" << std::endl;
+	FLOAT_TYPE* o_b = o;
+	FLOAT_TYPE* z_b = z;
 	for (int b = 0; b < batchs; ++b) {
-		FLOAT_TYPE* o_b = o + b*o_b_size;
-		FLOAT_TYPE* z_b = z + b*z_b_size;
-
+		FLOAT_TYPE* o_oh = o_b;
+		FLOAT_TYPE* z_oh = z_b;
 		for (int oh = 0; oh < o_h; ++oh) {
-			FLOAT_TYPE* o_oh = o_b + oh*o_oh_size;
-			FLOAT_TYPE* z_oh = z_b + oh*z_oh_size;
 
+			FLOAT_TYPE* o_ow = o_oh;
+			FLOAT_TYPE* z_ow = z_oh;
 			for (int ow = 0; ow < o_w; ++ow) {
-				FLOAT_TYPE* o_ow = o_oh + ow*o_c;
-				FLOAT_TYPE* z_ow = z_oh + ow*z_ow_size;
 
+				FLOAT_TYPE* f_fh = f;
+				FLOAT_TYPE* z_fh = z_ow;
 				for (int fh = 0; fh < f_h; ++fh) {
-					FLOAT_TYPE* f_fh = f + fh * f_fh_size;
-					FLOAT_TYPE* z_fh = z_ow + fh * z_fh_size;
-
+					FLOAT_TYPE* f_fw = f_fh;
+					FLOAT_TYPE* z_fw = z_fh;
 					for (int fw = 0; fw < f_w; ++fw) {
-						FLOAT_TYPE* f_fw = f_fh + fw * f_fw_size;
-						FLOAT_TYPE* z_fw = z_fh + fw * i_c;
 
+						FLOAT_TYPE* f_ic = f_fw;
 						for (int ic = 0; ic < i_c; ++ic) {
-							FLOAT_TYPE* f_ic = f_fw + ic * o_c;
-
 							for (int oc = 0; oc < o_c; ++oc) {
 								// o[b][oh][ow][oc] += z[b][ih][iw][ic] * f[fh][fw][ic][oc]
 								o_ow[oc] += z_fw[ic] * f_ic[oc];
 								// std::cout << (o_ow - o) + oc << '=' << (z_fw - z) + ic << '+' << (f_ic - f) + oc << std::endl;
 							}
+							f_ic += o_c;
 						}
+
+						f_fw += f_fw_size;
+						z_fw += i_c;
 					}
+
+					f_fh += f_fh_size;
+					z_fh += z_fh_size;
 				}
+
+				o_ow += o_c;
+				z_ow += z_ow_size;
 			}
+			o_oh += o_oh_size;
+			z_oh += z_oh_size;
 		}
+		o_b += o_b_size;
+		z_b += z_b_size;
 	}
 	//std::cout << "Receive" << std::endl;
 	return 0;
@@ -99,40 +110,45 @@ int conv2d_filter_gradient(
 	int z_fh_size = z_w*i_c;
 	int f_b_size = f_h*f_w*o_c;
 	int f_fh_size = f_w*o_c;
-	
+
+	FLOAT_TYPE* z_b = z;
+	FLOAT_TYPE* f_b = f;
 	for (int b = 0; b < batchs; ++b) {
-		FLOAT_TYPE* z_b = z + b*z_b_size;
-		FLOAT_TYPE* f_b = f + b*f_b_size;
-
+		FLOAT_TYPE* o_oh = o;
+		FLOAT_TYPE* z_oh = z_b;
 		for (int oh = 0; oh < o_h; ++oh) {
-			FLOAT_TYPE* o_oh = o + oh*o_oh_size;
-			FLOAT_TYPE* z_oh = z_b + oh*z_oh_size;
-
+			FLOAT_TYPE* o_ow = o_oh;
+			FLOAT_TYPE* z_ow = z_oh;
 			for (int ow = 0; ow < o_w; ++ow) {
-				FLOAT_TYPE* o_ow = o_oh + ow*o_ow_size;
-				FLOAT_TYPE* z_ow = z_oh + ow*i_c;
-
+				FLOAT_TYPE* z_fh = z_ow;
+				FLOAT_TYPE* f_fh = f_b;
 				for (int fh = 0; fh < f_h; ++fh) {
-					FLOAT_TYPE* z_fh = z_ow + fh *z_fh_size;
-					FLOAT_TYPE* f_fh = f_b + fh*f_fh_size;
-
+					FLOAT_TYPE* z_fw = z_fh;
+					FLOAT_TYPE* f_fw = f_fh;
 					for (int fw = 0; fw < f_w; ++fw) {
-						FLOAT_TYPE* z_fw = z_fh + fw *i_c;
-						FLOAT_TYPE* f_fw = f_fh + fw *o_c;
-
+						FLOAT_TYPE* o_ic = o_ow;
 						for (int ic = 0; ic < i_c; ++ic) {
-							FLOAT_TYPE* o_ic = o_ow + ic*o_c;
-
 							for (int oc = 0; oc < o_c; ++oc) {
 								// o[oh][ow][ic][oc] += z[b][oh+fh][ow+fw][ic] * f[b][fh][fw][oc]
 								o_ic[oc] += z_fw[ic] * f_fw[oc];
 								// std::cout << (o_ic - o) + oc << '=' << (z_fw - z) + ic << '+' << (f_fw - f) + oc << std::endl;
 							}
+							o_ic += o_c;
 						}
+						z_fw += i_c;
+						f_fw += o_c;
 					}	
+					z_fh += z_fh_size;
+					f_fh += f_fh_size;
 				}
+				o_ow += o_ow_size;
+				z_ow += i_c;
 			}
+			o_oh += o_oh_size;
+			z_oh += z_oh_size;
 		}
+		z_b += z_b_size;
+		f_b += f_b_size;
 	}
 	return 0;
 }
